@@ -170,10 +170,18 @@ class ControllerVisitor(ast.NodeVisitor):
 
     def visit_Dict(self, node: ast.Dict) -> None:
         keys = _dict_keys(node)
-        if "checkpoint" in keys and isinstance(keys["checkpoint"], ast.Dict):
-            self._check_checkpoint(keys["checkpoint"])
-        elif "subagent" in keys and "question" in keys:
+        brief = keys.get("checkpoint")
+        if isinstance(brief, ast.Dict):
+            self._check_checkpoint(brief)
+            for key, value in zip(node.keys, node.values):
+                if key is not None:
+                    self.visit(key)
+                if value is not brief:
+                    self.visit(value)
+            return
+        if "subagent" in keys and "question" in keys:
             self._check_checkpoint(node)
+            return
         self.generic_visit(node)
 
     def _check_checkpoint(self, node: ast.Dict) -> None:
@@ -348,13 +356,10 @@ def check_target(target: Path) -> list[Issue]:
             )
         ]
     issues: list[Issue] = []
-    report_root = target if (target / "code").is_dir() else (
-        projects[0] if len(projects) == 1 else target
-    )
-    if (target / "code").is_dir() and not projects:
-        issues.append(Issue("code", "contains no project directories"))
+    workspace = (target / "code").is_dir()
+    report_root = target if workspace else None
     for project in projects:
-        issues.extend(check_project(project, report_root if (target / "code").is_dir() else project))
+        issues.extend(check_project(project, report_root or project))
     return issues
 
 
